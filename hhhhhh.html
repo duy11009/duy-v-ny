@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Mini Game FF - EXP & Nâng cấp</title>
+    <style>
+        body {
+            background-color: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        #gameArea {
+            margin: 10px auto;
+            width: 600px;
+            height: 400px;
+            background-color: #333;
+            position: relative;
+            border: 3px solid #fff;
+            overflow: hidden;
+        }
+
+        #player {
+            width: 40px;
+            height: 40px;
+            background-color: #00ff00;
+            position: absolute;
+            top: 180px;
+            left: 0;
+            z-index: 2;
+        }
+
+        .bullet {
+            width: 10px;
+            height: 4px;
+            background-color: yellow;
+            position: absolute;
+            z-index: 1;
+        }
+
+        .monster {
+            width: 40px;
+            height: 40px;
+            background-color: red;
+            position: absolute;
+            right: 0;
+            top: 0;
+            z-index: 1;
+        }
+
+        #hpBar {
+            width: 200px;
+            height: 20px;
+            background-color: red;
+            margin: 10px auto;
+            border: 2px solid white;
+        }
+
+        #hpValue {
+            height: 100%;
+            background-color: lime;
+            width: 100%;
+        }
+
+        #gameOver {
+            font-size: 30px;
+            color: red;
+            display: none;
+        }
+
+        #upgradePanel {
+            margin-top: 10px;
+        }
+
+        button {
+            margin: 4px;
+            padding: 5px 10px;
+            font-size: 16px;
+        }
+
+        .stat {
+            font-size: 14px;
+        }
+
+        #levelInfo {
+            margin-top: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Mini Game FF - EXP & Nâng cấp</h1>
+    <p>Dùng phím mũi tên để di chuyển, Enter để bắn. Tránh quái vật!</p>
+
+    <div id="hpBar"><div id="hpValue"></div></div>
+
+    <div class="stat" id="stats">
+        ATK: 2 | DEF: 0% | SPD: 1.0x | Điểm nâng cấp: 0
+    </div>
+
+    <div id="levelInfo">
+        Level: 1 | EXP: 0 / 5
+    </div>
+
+    <div id="upgradePanel">
+        <button onclick="upgrade('atk')">Nâng Tấn Công</button>
+        <button onclick="upgrade('def')">Nâng Thủ</button>
+        <button onclick="upgrade('spd')">Nâng Tốc Độ</button>
+    </div>
+
+    <div id="gameArea">
+        <div id="player"></div>
+    </div>
+
+    <div id="gameOver">GAME OVER</div>
+
+    <script>
+        const gameArea = document.getElementById('gameArea');
+        const player = document.getElementById('player');
+        const hpValue = document.getElementById('hpValue');
+        const gameOverText = document.getElementById('gameOver');
+        const statText = document.getElementById('stats');
+        const levelText = document.getElementById('levelInfo');
+
+        // ==== Player Stats ====
+        let playerHP = 100;
+        let atkLevel = 0;
+        let defLevel = 0;
+        let spdLevel = 0;
+        let atkDamage = 2;
+        let moveSpeed = 10;
+        let defPercent = 0;
+
+        // ==== EXP & Level ====
+        let level = 1;
+        let exp = 0;
+        let upgradePoints = 0;
+
+        function expNeeded() {
+            return level * 5;
+        }
+
+        // ==== Player Position ====
+        let x = 0;
+        let y = 180;
+
+        // ==== Movement ====
+        document.addEventListener('keydown', function(e) {
+            if (playerHP <= 0) return;
+
+            const gameWidth = gameArea.clientWidth;
+            const gameHeight = gameArea.clientHeight;
+            const playerSize = player.clientWidth;
+
+            let step = moveSpeed;
+
+            switch(e.key) {
+                case "ArrowUp":
+                    if (y > 0) y -= step;
+                    break;
+                case "ArrowDown":
+                    if (y < gameHeight - playerSize) y += step;
+                    break;
+                case "ArrowLeft":
+                    if (x > 0) x -= step;
+                    break;
+                case "ArrowRight":
+                    if (x < gameWidth - playerSize) x += step;
+                    break;
+                case "Enter":
+                    shootBullet();
+                    break;
+            }
+
+            player.style.left = x + "px";
+            player.style.top = y + "px";
+        });
+
+        function shootBullet() {
+            const bullet = document.createElement('div');
+            bullet.className = 'bullet';
+            bullet.style.left = (x + 40) + 'px';
+            bullet.style.top = (y + 18) + 'px';
+            gameArea.appendChild(bullet);
+
+            let bulletInterval = setInterval(() => {
+                const bulletX = parseInt(bullet.style.left);
+                if (bulletX > gameArea.clientWidth) {
+                    bullet.remove();
+                    clearInterval(bulletInterval);
+                } else {
+                    bullet.style.left = (bulletX + 10) + 'px';
+                    checkBulletHit(bullet, bulletInterval);
+                }
+            }, 20);
+        }
+
+        function spawnMonster() {
+            const monster = document.createElement('div');
+            monster.className = 'monster';
+            const topPos = Math.floor(Math.random() * (gameArea.clientHeight - 40));
+            monster.style.top = topPos + 'px';
+            monster.style.left = gameArea.clientWidth - 40 + 'px';
+            monster.dataset.hp = 10;
+            gameArea.appendChild(monster);
+            moveMonster(monster);
+        }
+
+        function moveMonster(monster) {
+            let moveInterval = setInterval(() => {
+                if (!document.body.contains(monster)) {
+                    clearInterval(moveInterval);
+                    return;
+                }
+
+                const monsterX = parseFloat(monster.style.left);
+                const monsterY = parseFloat(monster.style.top);
+                const dx = x - monsterX;
+                const dy = y - monsterY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                const speed = 1.5;
+                const moveX = (dx / dist) * speed;
+                const moveY = (dy / dist) * speed;
+
+                monster.style.left = (monsterX + moveX) + 'px';
+                monster.style.top = (monsterY + moveY) + 'px';
+
+                checkPlayerCollision(monster);
+            }, 20);
+        }
+
+        function checkBulletHit(bullet, interval) {
+            const monsters = document.querySelectorAll('.monster');
+            monsters.forEach(m => {
+                const bRect = bullet.getBoundingClientRect();
+                const mRect = m.getBoundingClientRect();
+
+                if (
+                    bRect.left < mRect.right &&
+                    bRect.right > mRect.left &&
+                    bRect.top < mRect.bottom &&
+                    bRect.bottom > mRect.top
+                ) {
+                    let hp = parseInt(m.dataset.hp);
+                    hp -= atkDamage;
+                    m.dataset.hp = hp;
+
+                    bullet.remove();
+                    clearInterval(interval);
+
+                    if (hp <= 0) {
+                        m.remove();
+                        gainExp(5);
+                    }
+                }
+            });
+        }
+
+        function checkPlayerCollision(monster) {
+            const mRect = monster.getBoundingClientRect();
+            const pRect = player.getBoundingClientRect();
+
+            if (
+                mRect.left < pRect.right &&
+                mRect.right > pRect.left &&
+                mRect.top < pRect.bottom &&
+                mRect.bottom > pRect.top
+            ) {
+                const baseDmg = 2;
+                const dmg = Math.round(baseDmg * (1 - defPercent));
+                playerHP -= dmg;
+                updateHP();
+
+                // Hất ra
+                monster.style.left = (parseFloat(monster.style.left) + 20) + 'px';
+
+                if (playerHP <= 0) {
+                    gameOver();
+                }
+            }
+        }
+
+        function updateHP() {
+            playerHP = Math.max(playerHP, 0);
+            hpValue.style.width = playerHP + '%';
+        }
+
+        function gameOver() {
+            gameOverText.style.display = 'block';
+        }
+
+        function upgrade(type) {
+            if (upgradePoints <= 0) return;
+
+            if (type === 'atk' && atkLevel < 5) {
+                atkLevel++;
+                atkDamage = 2 + atkLevel;
+                upgradePoints--;
+            }
+            if (type === 'def' && defLevel < 5) {
+                defLevel++;
+                defPercent = defLevel * 0.1;
+                upgradePoints--;
+            }
+            if (type === 'spd' && spdLevel < 5) {
+                spdLevel++;
+                moveSpeed = Math.round(10 * (1 + 0.1 * spdLevel));
+                upgradePoints--;
+            }
+
+            updateStats();
+        }
+
+        function gainExp(amount) {
+            exp += amount;
+            while (exp >= expNeeded()) {
+                exp -= expNeeded();
+                level++;
+                upgradePoints++;
+            }
+            updateStats();
+        }
+
+        function updateStats() {
+            statText.innerText = `ATK: ${atkDamage} | DEF: ${Math.round(defPercent * 100)}% | SPD: ${moveSpeed / 10}x | Điểm nâng cấp: ${upgradePoints}`;
+            levelText.innerText = `Level: ${level} | EXP: ${exp} / ${expNeeded()}`;
+        }
+
+        setInterval(spawnMonster, 5000);
+    </script>
+</body>
+</html>
